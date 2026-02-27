@@ -1,0 +1,61 @@
+# GRPCRoute - For applications using gRPC backend protocol
+#
+# Maps from nginx annotation:
+#   nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+#
+# GRPCRoute is part of the standard Gateway API channel since v1.2.0.
+# The Gateway's HTTPS listener handles TLS termination for gRPC the same
+# way as HTTP -- no special listener configuration needed.
+#
+# For GRPCS (TLS to backend), combine this with a BackendTLSPolicy.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  # REPLACE: your app name
+  name: your-grpc-app
+  # REPLACE: your app namespace
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway
+      # REPLACE: namespace where Envoy Gateway is installed
+      namespace: envoy-gateway-system
+  hostnames:
+    # REPLACE: your gRPC service hostname
+    - "grpc.your-domain.example.com"
+  rules:
+    # Route all gRPC traffic to the backend
+    - backendRefs:
+        # REPLACE: your gRPC service name and port
+        - name: your-grpc-app
+          port: 50051
+---
+# Optional: GRPCRoute with method-level routing
+# Use this when you need to route specific gRPC methods to different backends
+# or apply different policies to different methods.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: your-grpc-app-methods
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway
+      namespace: envoy-gateway-system
+  hostnames:
+    - "grpc.your-domain.example.com"
+  rules:
+    # Route a specific gRPC service to one backend
+    - matches:
+        - method:
+            # REPLACE: your gRPC service and method
+            service: mypackage.MyService
+            method: MyMethod
+      backendRefs:
+        - name: your-grpc-app-v2
+          port: 50051
+    # Default: all other gRPC traffic to the primary backend
+    - backendRefs:
+        - name: your-grpc-app
+          port: 50051

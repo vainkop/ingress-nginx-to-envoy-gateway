@@ -1,0 +1,78 @@
+# Gateway - The main ingress entry point for the cluster
+#
+# This Gateway creates:
+# - An HTTP listener on port 80 (for redirects and cert-manager http01 challenges)
+# - An HTTPS listener on port 443 (for production traffic with TLS termination)
+# - An example app-specific HTTPS listener (one per hostname that needs its own cert)
+#
+# IMPORTANT:
+# - allowedRoutes.namespaces.from MUST be "All" so that HTTPRoutes in app namespaces
+#   can attach to this Gateway. The default "Same" only allows routes in the Gateway's
+#   own namespace, which breaks cross-namespace routing.
+# - The cert-manager annotation triggers automatic certificate issuance for listeners
+#   with TLS configuration.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: envoy-gateway
+  # REPLACE: namespace where Envoy Gateway is installed
+  namespace: envoy-gateway-system
+  annotations:
+    # REPLACE: use your ClusterIssuer name (see cluster-issuer-gateway.yaml)
+    cert-manager.io/cluster-issuer: letsencrypt-prod-gateway
+spec:
+  gatewayClassName: eg
+  listeners:
+    # ------------------------------------------------------------------
+    # HTTP listener (port 80)
+    # Used for:
+    # 1. cert-manager http01 ACME challenges
+    # 2. HTTP-to-HTTPS redirects (via HTTPRoute)
+    # ------------------------------------------------------------------
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          # CRITICAL: Must be "All" for cross-namespace HTTPRoutes
+          from: All
+
+    # ------------------------------------------------------------------
+    # HTTPS wildcard listener (port 443)
+    # Catches all HTTPS traffic. Hostname-specific listeners below take
+    # precedence for their exact hostnames.
+    # ------------------------------------------------------------------
+    - name: https
+      protocol: HTTPS
+      port: 443
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          # REPLACE: name of a wildcard or default TLS secret
+          - name: wildcard-tls
+            # REPLACE: namespace of the TLS secret (or omit for same namespace)
+            namespace: envoy-gateway-system
+
+    # ------------------------------------------------------------------
+    # Example: App-specific HTTPS listener
+    # One listener per hostname allows cert-manager to issue per-host certs.
+    # Duplicate this block for each application hostname.
+    # ------------------------------------------------------------------
+    - name: your-app  # REPLACE: short name for the app
+      protocol: HTTPS
+      port: 443
+      # REPLACE: the exact hostname for this application
+      hostname: your-app.your-domain.example.com
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        mode: Terminate
+        certificateRefs:
+          # cert-manager auto-creates this secret from the listener hostname
+          # REPLACE: secret name (convention: hostname with dots replaced by dashes)
+          - name: your-app-your-domain-example-com-tls

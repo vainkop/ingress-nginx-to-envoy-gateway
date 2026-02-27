@@ -1,0 +1,60 @@
+# HTTPRoute with BackendTrafficPolicy - Timeout and request buffer settings
+#
+# BackendTrafficPolicy (BTP) replaces several nginx Ingress annotations:
+# - nginx.ingress.kubernetes.io/proxy-read-timeout    -> spec.timeout.http.requestTimeout
+# - nginx.ingress.kubernetes.io/proxy-send-timeout    -> spec.timeout.http.requestTimeout
+# - nginx.ingress.kubernetes.io/proxy-connect-timeout -> spec.timeout.tcp.connectTimeout
+# - nginx.ingress.kubernetes.io/proxy-body-size       -> spec.requestBuffer.limit
+#
+# Note: BTP targets the HTTPRoute (not the Gateway), so settings are per-app.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your application
+  name: your-app
+  # REPLACE: namespace where your application runs
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: service name and port
+        - name: your-app
+          port: 80
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  # REPLACE: name (convention: same as the HTTPRoute)
+  name: your-app
+  # REPLACE: same namespace as the HTTPRoute
+  namespace: your-namespace
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: your-app  # REPLACE: must match HTTPRoute name above
+  timeout:
+    http:
+      # REPLACE: request timeout (maps to proxy-read-timeout / proxy-send-timeout)
+      # Format: duration string, e.g. "60s", "120s", "300s"
+      requestTimeout: "60s"
+    tcp:
+      # REPLACE: upstream connect timeout (maps to proxy-connect-timeout)
+      connectTimeout: "5s"
+  # REPLACE: max request body size (maps to proxy-body-size)
+  # Format: resource.Quantity, e.g. "10Mi", "100Mi", "1Gi"
+  # Omit this field entirely for unlimited (Envoy default: unlimited)
+  requestBuffer:
+    limit: "50Mi"

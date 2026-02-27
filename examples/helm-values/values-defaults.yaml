@@ -1,0 +1,75 @@
+# Default Helm values for Gateway API migration
+#
+# Add these defaults to your chart's values.yaml to support both ingress-nginx
+# and Envoy Gateway simultaneously. The gatewayAPI section is disabled by default,
+# allowing a gradual per-environment migration.
+#
+# IMPORTANT: Never set gatewayAPI.enabled: true in the root values.yaml.
+# Only enable it in environment-specific override files (e.g. dev-values.yaml)
+# to limit the blast radius to one cluster at a time.
+#
+# Usage pattern:
+#   values.yaml          -> gatewayAPI.enabled: false (this file)
+#   dev-values.yaml      -> gatewayAPI.enabled: true  (after dev migration)
+#   staging-values.yaml  -> gatewayAPI.enabled: true  (after staging migration)
+#   prod-values.yaml     -> gatewayAPI.enabled: true  (after prod migration)
+
+# --- Existing ingress configuration (keep as-is) ---
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+  hosts:
+    # REPLACE: your application's hostname
+    - host: your-app.your-domain.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: your-app-tls
+      hosts:
+        # REPLACE: your application's hostname
+        - your-app.your-domain.example.com
+
+# --- Gateway API configuration (new) ---
+gatewayAPI:
+  # Master toggle: set to true in env-specific values to switch from Ingress to HTTPRoute.
+  # When true, the chart renders HTTPRoute + optional BTP instead of Ingress.
+  # When false (default), the chart renders the traditional Ingress resource.
+  enabled: false
+
+  # REPLACE: name of the Gateway resource in your cluster
+  gatewayName: "envoy-gateway"
+  # REPLACE: namespace where the Gateway resource lives
+  gatewayNamespace: "envoy-gateway-system"
+  # REPLACE: listener name on the Gateway for this app's HTTPS traffic
+  sectionName: "https"
+
+  # BackendTrafficPolicy: request body size limit
+  # Maps to nginx annotation: proxy-body-size
+  # Format: resource.Quantity (e.g. "10Mi", "100Mi", "1Gi")
+  # Empty string = unlimited (Envoy default)
+  requestBufferLimit: ""
+
+  # BackendTrafficPolicy: timeout settings
+  timeout:
+    http:
+      # Maps to nginx annotations: proxy-read-timeout, proxy-send-timeout
+      # Format: duration string (e.g. "60s", "300s", "3600s")
+      # Empty string = Envoy default (15s)
+      requestTimeout: ""
+    tcp:
+      # Maps to nginx annotation: proxy-connect-timeout
+      # Format: duration string (e.g. "5s", "10s")
+      # Empty string = Envoy default (5s)
+      connectTimeout: ""
+
+  # BackendTrafficPolicy: session affinity (cookie-based consistent hashing)
+  # Maps to nginx annotations: affinity, session-cookie-name, session-cookie-max-age
+  # NOTE: uses loadBalancer.consistentHash.cookie, NOT sessionPersistence (which
+  # does not exist in Envoy Gateway v1.7.0 BackendTrafficPolicy)
+  sessionAffinity:
+    # Cookie name for session affinity. Empty = no session affinity.
+    cookieName: ""
+    # Cookie TTL. Format: duration string (e.g. "3600s")
+    cookieTTL: ""

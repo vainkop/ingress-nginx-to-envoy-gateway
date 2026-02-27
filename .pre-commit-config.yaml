@@ -1,0 +1,52 @@
+repos:
+  # Secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.22.1
+    hooks:
+      - id: gitleaks
+
+  # Kubernetes YAML security analysis
+  - repo: https://github.com/bridgecrewio/checkov
+    rev: 3.2.345
+    hooks:
+      - id: checkov
+        files: \.ya?ml$
+        args: ["--framework", "kubernetes", "--skip-check", "CKV_K8S_43"]
+        # CKV_K8S_43: "Image should use a fixed tag" -- not applicable to examples with placeholders
+
+  # YAML linting
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yaml]
+
+  # Markdown linting
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # Kubernetes YAML schema validation (local hook)
+  - repo: local
+    hooks:
+      - id: kubeconform
+        name: kubeconform
+        language: script
+        entry: scripts/validate-yaml.sh
+        files: ^examples/(?!helm-values/).*\.ya?ml$
+        pass_filenames: true
+
+      - id: helm-lint
+        name: helm-lint
+        language: system
+        entry: bash -c 'echo "Helm lint skipped -- no charts in this repo" && exit 0'
+        files: ^Chart\.yaml$
+        pass_filenames: false

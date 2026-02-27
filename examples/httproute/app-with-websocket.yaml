@@ -1,0 +1,61 @@
+# HTTPRoute with WebSocket support
+#
+# Envoy natively handles WebSocket upgrades - no special annotation is needed
+# (unlike nginx which requires nginx.ingress.kubernetes.io/proxy-read-timeout
+# and nginx.ingress.kubernetes.io/websocket-services annotations).
+#
+# The key difference: set a long requestTimeout on the BackendTrafficPolicy
+# to prevent Envoy from closing idle WebSocket connections. The default Envoy
+# timeout is 15s, which will kill most WebSocket connections prematurely.
+#
+# nginx equivalents:
+#   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+#   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+#   nginx.ingress.kubernetes.io/websocket-services: "your-app"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your WebSocket application
+  name: your-websocket-app
+  # REPLACE: namespace where your application runs
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-websocket-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: service name and port
+        - name: your-websocket-app
+          port: 80
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  # REPLACE: name (convention: same as the HTTPRoute)
+  name: your-websocket-app
+  # REPLACE: same namespace as the HTTPRoute
+  namespace: your-namespace
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: your-websocket-app  # REPLACE: must match HTTPRoute name above
+  timeout:
+    http:
+      # Long timeout for WebSocket connections.
+      # 3600s = 1 hour. Adjust based on your application's needs.
+      # Envoy will close idle WS connections after this duration.
+      # REPLACE: set appropriate timeout for your WebSocket use case
+      requestTimeout: "3600s"
+    tcp:
+      connectTimeout: "5s"

@@ -1,0 +1,49 @@
+# Simple HTTPRoute - Basic application routing
+#
+# This is the Gateway API equivalent of a basic Ingress resource.
+# It routes all traffic for a hostname to a single backend service.
+#
+# nginx Ingress equivalent:
+#   apiVersion: networking.k8s.io/v1
+#   kind: Ingress
+#   metadata:
+#     annotations:
+#       kubernetes.io/ingress.class: nginx
+#   spec:
+#     rules:
+#       - host: your-app.your-domain.example.com
+#         http:
+#           paths:
+#             - path: /
+#               pathType: Prefix
+#               backend:
+#                 service:
+#                   name: your-app
+#                   port:
+#                     number: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your application
+  name: your-app
+  # REPLACE: namespace where your application runs
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      # REPLACE: namespace where the Gateway lives
+      namespace: envoy-gateway-system
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: service name and port for your application
+        - name: your-app
+          port: 80

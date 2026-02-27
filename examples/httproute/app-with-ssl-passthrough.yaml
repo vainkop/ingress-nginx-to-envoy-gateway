@@ -1,0 +1,49 @@
+# TLSRoute with SSL Passthrough - For applications that handle TLS themselves
+#
+# Maps from nginx annotation:
+#   nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+#
+# SSL passthrough means Envoy does NOT terminate TLS -- the encrypted traffic
+# is forwarded directly to the backend pod, which must handle TLS termination.
+#
+# IMPORTANT:
+# - TLSRoute requires the experimental Gateway API CRDs to be installed
+# - The Gateway needs a dedicated TLS listener with mode: Passthrough
+# - Only SNI-based routing is possible (Envoy cannot inspect encrypted payload)
+# - Cannot combine with HTTPRoute features (headers, rewrites, etc.)
+#
+# PREREQUISITE: Add a Passthrough listener to your Gateway:
+#
+#   listeners:
+#     - name: tls-passthrough
+#       protocol: TLS
+#       port: 443
+#       hostname: "passthrough.your-domain.example.com"
+#       tls:
+#         mode: Passthrough
+#       allowedRoutes:
+#         namespaces:
+#           from: All
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  # REPLACE: your app name
+  name: your-passthrough-app
+  # REPLACE: your app namespace
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway
+      # REPLACE: namespace where Envoy Gateway is installed
+      namespace: envoy-gateway-system
+      # Must reference the Passthrough listener by name
+      sectionName: tls-passthrough
+  hostnames:
+    # REPLACE: must match the Gateway listener hostname
+    - "passthrough.your-domain.example.com"
+  rules:
+    - backendRefs:
+        # REPLACE: your backend service (must accept TLS connections)
+        - name: your-passthrough-app
+          port: 443

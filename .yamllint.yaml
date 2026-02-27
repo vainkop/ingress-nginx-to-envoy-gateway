@@ -1,0 +1,26 @@
+---
+extends: default
+
+rules:
+  # Kubernetes manifests often have long lines
+  line-length:
+    max: 200
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # Allow --- document start (common in K8s multi-doc YAML)
+  document-start: disable
+
+  # Relaxed indentation for K8s patterns
+  indentation:
+    spaces: 2
+    indent-sequences: whatever
+
+  # Comments don't need a space after # in some contexts
+  comments:
+    min-spaces-from-content: 1
+
+  # Truthy values -- allow 'on' in GitHub Actions
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false

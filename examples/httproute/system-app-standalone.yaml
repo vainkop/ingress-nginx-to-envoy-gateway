@@ -1,0 +1,79 @@
+# Standalone HTTPRoute for System Apps (upstream Helm charts)
+#
+# ============================================================================
+# WHEN TO USE THIS PATTERN
+# ============================================================================
+# Use a standalone HTTPRoute YAML (not in the app's Helm chart) when:
+#
+# 1. The app is deployed via an UPSTREAM Helm chart that you don't control
+#    (e.g. ArgoCD, Grafana, Prometheus, Kubernetes Dashboard, etc.)
+# 2. The upstream chart only supports Ingress, not Gateway API HTTPRoute
+# 3. You want to avoid forking or patching the upstream chart
+#
+# Place this file alongside the app's HelmRelease in your GitOps repo
+# (e.g. in the same Flux Kustomization or ArgoCD Application directory).
+#
+# ============================================================================
+# WHEN TO USE HELM TEMPLATES INSTEAD
+# ============================================================================
+# Use Helm chart templates (see helm-values/ examples) when:
+# - You control the Helm chart (your own application charts)
+# - You want the HTTPRoute lifecycle tied to the app's Helm release
+# - You need values-driven configuration per environment
+#
+# ============================================================================
+# MIGRATION STEPS FOR SYSTEM APPS
+# ============================================================================
+# 1. Create this standalone HTTPRoute YAML in your GitOps repo
+# 2. Verify the HTTPRoute is accepted: kubectl get httproute -n <namespace>
+# 3. Switch DNS (or update external-dns) to point to the Envoy LB IP
+# 4. Delete the old Ingress resource (if not managed by Helm, delete manually;
+#    if managed by Helm, set ingress.enabled: false in values)
+# 5. Verify traffic flows through Envoy Gateway
+# ============================================================================
+
+# Example: Standalone HTTPRoute for a system app (e.g. ArgoCD server)
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name matching the system app
+  name: your-system-app
+  # REPLACE: namespace where the system app is deployed
+  namespace: your-system-namespace
+  labels:
+    # Optional: label for identification
+    app.kubernetes.io/managed-by: gitops
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your system app's hostname
+    - your-system-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: the system app's service name and port
+        # Examples:
+        #   ArgoCD server:  name: argocd-server, port: 80 (or 443 for HTTPS backend)
+        #   Grafana:        name: grafana, port: 80
+        #   Prometheus:     name: prometheus-server, port: 80
+        - name: your-system-app
+          port: 80
+    # Optional: if the system app has a gRPC endpoint (e.g. ArgoCD)
+    # Uncomment and adjust the rule below:
+    # - matches:
+    #     - path:
+    #         type: PathPrefix
+    #         value: /
+    #       headers:
+    #         - name: content-type
+    #           value: application/grpc
+    #   backendRefs:
+    #     - name: your-system-app-grpc
+    #       port: 443

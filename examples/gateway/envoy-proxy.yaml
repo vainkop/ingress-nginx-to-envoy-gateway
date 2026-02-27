@@ -1,0 +1,80 @@
+# EnvoyProxy - Custom proxy configuration for the Envoy Gateway data plane
+#
+# This resource controls how the Envoy proxy pods are deployed:
+# - Replica count and anti-affinity for HA
+# - Node placement via nodeSelector
+# - LoadBalancer settings (externalTrafficPolicy)
+# - Access log format (JSON with RESPONSE_CODE_DETAILS for debugging)
+#
+# Referenced by GatewayClass.spec.parametersRef.
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: custom-proxy-config
+  # REPLACE: namespace where Envoy Gateway is installed
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 3
+        pod:
+          # REPLACE: set nodeSelector to match your cluster's node labels
+          # Examples: kubernetes.io/arch: amd64, node-role: infra, etc.
+          nodeSelector:
+            kubernetes.io/arch: amd64
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: gateway.envoyproxy.io/owning-gateway-name
+                          operator: Exists
+                    topologyKey: kubernetes.io/hostname
+      envoyService:
+        type: LoadBalancer
+        # Local preserves client source IP. Use Cluster if source IP is not needed
+        # and you want more even load distribution across nodes.
+        externalTrafficPolicy: Local
+        # REPLACE: add cloud-provider annotations if needed
+        # For Azure: service.beta.kubernetes.io/azure-load-balancer-resource-group
+        # For AWS: service.beta.kubernetes.io/aws-load-balancer-type: nlb
+        annotations: {}
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: JSON
+            json:
+              # Structured access log format for production debugging.
+              #
+              # CRITICAL: %RESPONSE_CODE_DETAILS% shows exactly why Envoy rejected
+              # a request (e.g. "http1.unexpected_underscore", "filter_chain_not_found",
+              # "via_upstream"). Without this field, debugging proxy-level 400/503 errors
+              # is nearly impossible.
+              start_time: "%START_TIME%"
+              method: "%REQ(:METHOD)%"
+              path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              protocol: "%PROTOCOL%"
+              response_code: "%RESPONSE_CODE%"
+              response_code_details: "%RESPONSE_CODE_DETAILS%"
+              response_flags: "%RESPONSE_FLAGS%"
+              bytes_received: "%BYTES_RECEIVED%"
+              bytes_sent: "%BYTES_SENT%"
+              duration: "%DURATION%"
+              upstream_service_time: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
+              x_forwarded_for: "%REQ(X-FORWARDED-FOR)%"
+              user_agent: "%REQ(USER-AGENT)%"
+              request_id: "%REQ(X-REQUEST-ID)%"
+              authority: "%REQ(:AUTHORITY)%"
+              upstream_host: "%UPSTREAM_HOST%"
+              upstream_cluster: "%UPSTREAM_CLUSTER%"
+              upstream_transport_failure_reason: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout

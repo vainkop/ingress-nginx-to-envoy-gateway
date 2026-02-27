@@ -1,0 +1,36 @@
+# markdownlint configuration
+# https://github.com/DavidAnson/markdownlint
+
+# Line length -- disabled for docs with long command examples
+MD013: false
+
+# Blanks around headings -- relaxed for compact reference docs
+MD022: false
+
+# Allow multiple headings with the same content (common in gotchas)
+MD024:
+  siblings_only: true
+
+# Ordered list prefix -- allow continuation numbering (1-22 constraints list)
+MD029: false
+
+# Blanks around fences -- relaxed for heading+code patterns in reference docs
+MD031: false
+
+# Blanks around lists -- too strict for agent/skill instruction docs
+MD032: false
+
+# Allow inline HTML (used for collapsible sections, badges)
+MD033: false
+
+# Allow bare URLs (common in K8s docs)
+MD034: false
+
+# Fenced code language -- not always needed for pseudo-code blocks
+MD040: false
+
+# First line doesn't need to be a heading
+MD041: false
+
+# Unordered list indentation -- allow 3-space sub-lists
+MD007: false

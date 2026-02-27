@@ -1,0 +1,65 @@
+# Flux HelmRelease for Envoy Gateway
+#
+# This installs Envoy Gateway and its CRDs into your cluster via Flux.
+#
+# Prerequisites:
+# 1. Gateway API CRDs should be installed first (see envoy-gateway-kustomization.yaml
+#    for dependency ordering)
+# 2. The envoy-gateway-system namespace must exist
+#
+# After installation:
+# 1. Apply the GatewayClass (gateway-class.yaml)
+# 2. Apply the EnvoyProxy config (envoy-proxy.yaml)
+# 3. Apply the Gateway (gateway.yaml)
+# 4. Apply the ClientTrafficPolicy (client-traffic-policy.yaml)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: envoy-gateway-system
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: envoy-gateway
+  namespace: envoy-gateway-system
+spec:
+  interval: 1h
+  url: https://gateway.envoyproxy.io/helm
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: envoy-gateway
+  namespace: envoy-gateway-system
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: gateway-helm
+      # REPLACE: pin to your desired version
+      version: "v1.7.0"
+      sourceRef:
+        kind: HelmRepository
+        name: envoy-gateway
+        namespace: envoy-gateway-system
+  install:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  upgrade:
+    crds: CreateReplace
+    remediation:
+      retries: 3
+  values:
+    # REPLACE: customize Envoy Gateway controller settings
+    config:
+      envoyGateway:
+        gateway:
+          controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    deployment:
+      replicas: 2
+      pod:
+        # REPLACE: set nodeSelector for your cluster's node labels
+        nodeSelector:
+          kubernetes.io/arch: amd64

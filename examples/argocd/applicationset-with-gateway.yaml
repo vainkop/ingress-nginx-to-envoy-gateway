@@ -1,0 +1,101 @@
+# ArgoCD ApplicationSet with per-environment Gateway API overrides
+#
+# This ApplicationSet deploys the same application across multiple environments
+# (dev, staging, prod) with different Gateway API settings per environment.
+#
+# Migration strategy:
+# 1. Start with gatewayAPI.enabled: false in all environments (default)
+# 2. Set gatewayAPI.enabled: true for dev first, validate
+# 3. Roll forward to staging, then prod
+# 4. After all environments are migrated, set ingress.enabled: false globally
+#
+# CRITICAL: For each environment, the cutover (ingress.enabled: false +
+# gatewayAPI.enabled: true) must happen in a single commit to avoid DNS flapping.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  # REPLACE: name of your application
+  name: your-app
+  # REPLACE: namespace where ArgoCD is installed
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - list:
+        elements:
+          # ----------------------------------------------------------------
+          # Dev environment - migrated to Gateway API
+          # ----------------------------------------------------------------
+          - env: dev
+            # REPLACE: name of the target Kubernetes cluster in ArgoCD
+            cluster: dev-cluster
+            # REPLACE: target namespace for the app in this environment
+            namespace: your-namespace
+            valuesFile: values-dev.yaml
+            # Gateway API enabled after successful dev migration
+            gatewayEnabled: "true"
+            ingressEnabled: "false"
+
+          # ----------------------------------------------------------------
+          # Staging environment - migrated to Gateway API
+          # ----------------------------------------------------------------
+          - env: staging
+            # REPLACE: name of the target Kubernetes cluster in ArgoCD
+            cluster: staging-cluster
+            # REPLACE: target namespace
+            namespace: your-namespace
+            valuesFile: values-staging.yaml
+            # Gateway API enabled after successful staging migration
+            gatewayEnabled: "true"
+            ingressEnabled: "false"
+
+          # ----------------------------------------------------------------
+          # Production environment - still on ingress-nginx (not yet migrated)
+          # ----------------------------------------------------------------
+          - env: prod
+            # REPLACE: name of the target Kubernetes cluster in ArgoCD
+            cluster: prod-cluster
+            # REPLACE: target namespace
+            namespace: your-namespace
+            valuesFile: values-prod.yaml
+            # Still using ingress-nginx until prod migration is complete
+            gatewayEnabled: "false"
+            ingressEnabled: "true"
+
+  template:
+    metadata:
+      # REPLACE: naming convention for your ArgoCD Applications
+      name: "your-app-{{ .env }}"
+    spec:
+      project: default  # REPLACE: your ArgoCD project name
+      source:
+        # REPLACE: your Helm chart repository URL
+        repoURL: https://github.com/your-org/your-helm-charts.git
+        # REPLACE: path to the chart in the repo
+        path: charts/your-app
+        targetRevision: HEAD  # REPLACE: branch or tag
+        helm:
+          # Environment-specific values file from the chart repo
+          valueFiles:
+            - "{{ .valuesFile }}"
+          # Per-environment overrides for Gateway API migration
+          parameters:
+            # Toggle ingress on/off per environment
+            - name: ingress.enabled
+              value: "{{ .ingressEnabled }}"
+            # Toggle Gateway API on/off per environment
+            - name: gatewayAPI.enabled
+              value: "{{ .gatewayEnabled }}"
+      destination:
+        # REPLACE: cluster URL or name
+        name: "{{ .cluster }}"
+        namespace: "{{ .namespace }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

@@ -1,0 +1,34 @@
+# HTTP-to-HTTPS redirect via HTTPRoute
+#
+# In ingress-nginx, HTTP-to-HTTPS redirect is automatic (default behavior).
+# With Envoy Gateway, you need an explicit HTTPRoute attached to the HTTP
+# listener (port 80) that issues a 301 redirect to HTTPS.
+#
+# This HTTPRoute:
+# 1. Attaches to the Gateway's HTTP listener (port 80)
+# 2. Matches ALL hostnames and paths
+# 3. Returns a 301 redirect with the scheme changed to HTTPS
+#
+# Apply this once per cluster. It covers all hostnames on the Gateway.
+# cert-manager http01 challenges still work because cert-manager creates
+# its own temporary HTTPRoutes with more specific path matches, which take
+# precedence over this catch-all redirect.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https-redirect
+  # REPLACE: namespace where the Gateway lives
+  namespace: envoy-gateway-system
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      # IMPORTANT: attach to the HTTP listener (port 80), not HTTPS
+      sectionName: http  # REPLACE: name of the HTTP listener in your Gateway
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

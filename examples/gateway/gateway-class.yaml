@@ -1,0 +1,22 @@
+# GatewayClass for Envoy Gateway
+#
+# This is the cluster-scoped resource that tells Kubernetes which controller
+# manages Gateways of this class. Only one GatewayClass per controller is needed.
+#
+# The parametersRef links to an EnvoyProxy resource for custom proxy configuration
+# (replicas, access logs, node placement, etc.).
+#
+# Apply this AFTER Envoy Gateway CRDs and controller are installed.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: custom-proxy-config
+    # REPLACE: namespace where Envoy Gateway is installed
+    namespace: envoy-gateway-system

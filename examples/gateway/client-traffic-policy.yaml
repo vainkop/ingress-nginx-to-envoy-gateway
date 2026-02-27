@@ -1,0 +1,34 @@
+# ClientTrafficPolicy - Cluster-wide client-side traffic settings
+#
+# MANDATORY: withUnderscoresAction: Allow
+#
+# By default, Envoy REJECTS HTTP headers that contain underscores (e.g.
+# "X_Custom_Header", "X_Forwarded_For"). This is a security measure in Envoy,
+# but it breaks many real-world applications because:
+#
+# 1. ingress-nginx allows underscored headers by default
+# 2. CDNs/WAFs (e.g. Cloudflare) may inject headers with underscores
+# 3. Legacy applications and server-side API callouts often use underscored headers
+#
+# Without this policy, requests containing underscored headers receive HTTP 400
+# with response_code_details: "http1.unexpected_underscore" in Envoy access logs.
+#
+# This policy targets the Gateway resource, so it applies to ALL listeners and
+# ALL HTTPRoutes attached to that Gateway. Apply it once per cluster.
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: allow-underscore-headers
+  # REPLACE: namespace where the Gateway lives
+  namespace: envoy-gateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      # REPLACE: name of your Gateway resource
+      name: envoy-gateway
+  headers:
+    # Allow headers with underscores to pass through to backends.
+    # Options: Allow, RejectRequest, DropHeader
+    withUnderscoresAction: Allow

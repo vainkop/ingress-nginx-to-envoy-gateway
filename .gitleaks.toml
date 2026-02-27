@@ -1,0 +1,22 @@
+[extend]
+# Use default gitleaks rules
+useDefault = true
+
+[allowlist]
+description = "Allow example/placeholder values"
+
+# Example YAML files use placeholder values like your-domain.example.com
+paths = [
+  '''migration\.config\.example\.yaml''',
+]
+
+regexTarget = "match"
+regexes = [
+  # Allow example placeholder patterns
+  '''your-[a-z-]+\.example\.com''',
+  '''your-[a-z-]+''',
+  '''REPLACE:''',
+  # Allow documentation references to secret patterns
+  '''\.htpasswd''',
+  '''letsencrypt-prod''',
+]

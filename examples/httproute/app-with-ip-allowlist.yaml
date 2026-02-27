@@ -1,0 +1,83 @@
+# IP Allowlist / Denylist - Restrict access by source IP
+#
+# Maps from nginx annotations:
+#   nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12"
+#   nginx.ingress.kubernetes.io/denylist-source-range: "192.168.1.0/24"
+#
+# Uses SecurityPolicy with authorization rules and CIDR-based matching.
+# Use targetRefs (plural) to attach to one or more HTTPRoutes.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: your app name
+  name: your-app
+  # REPLACE: your app namespace
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway
+      # REPLACE: namespace where Envoy Gateway is installed
+      namespace: envoy-gateway-system
+  hostnames:
+    # REPLACE: your application hostname
+    - "your-app.your-domain.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: your backend service name and port
+        - name: your-app
+          port: 8080
+---
+# Allowlist pattern: deny all, allow specific CIDRs
+# Equivalent to: whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,203.0.113.50/32"
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: your-app-ip-allowlist
+  namespace: your-namespace
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: your-app
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allow-internal-networks
+        action: Allow
+        principal:
+          clientCIDRs:
+            # REPLACE: your allowed CIDR ranges
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+      - name: allow-office-ip
+        action: Allow
+        principal:
+          clientCIDRs:
+            # REPLACE: specific IPs or ranges
+            - "203.0.113.50/32"
+---
+# Denylist pattern: allow all, deny specific CIDRs
+# Equivalent to: denylist-source-range: "192.168.1.0/24"
+# apiVersion: gateway.envoyproxy.io/v1alpha1
+# kind: SecurityPolicy
+# metadata:
+#   name: your-app-ip-denylist
+#   namespace: your-namespace
+# spec:
+#   targetRefs:
+#     - group: gateway.networking.k8s.io
+#       kind: HTTPRoute
+#       name: your-app
+#   authorization:
+#     defaultAction: Allow
+#     rules:
+#       - name: deny-bad-range
+#         action: Deny
+#         principal:
+#           clientCIDRs:
+#             - "192.168.1.0/24"

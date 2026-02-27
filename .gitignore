@@ -1,0 +1,29 @@
+# User-specific migration config (contains paths, cluster names)
+migration.config.yaml
+
+# Claude Code
+.claude/projects/
+.claude/memory/
+.claude/teams/
+.claude/tasks/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Helm
+charts/
+*.tgz
+
+# Temporary
+tmp/
+*.tmp
+*.bak

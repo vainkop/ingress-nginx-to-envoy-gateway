@@ -1,0 +1,66 @@
+# HTTPRoute with Session Affinity (Cookie-based consistent hashing)
+#
+# IMPORTANT: In Envoy Gateway v1.7.0, BackendTrafficPolicy does NOT have
+# spec.sessionPersistence. Use spec.loadBalancer.consistentHash.cookie instead.
+#
+# This is the Gateway API equivalent of:
+#   nginx.ingress.kubernetes.io/affinity: cookie
+#   nginx.ingress.kubernetes.io/session-cookie-name: my-cookie
+#   nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+#   nginx.ingress.kubernetes.io/session-cookie-path: /
+#
+# How it works: Envoy hashes a cookie value to select a consistent backend pod.
+# If the cookie doesn't exist, Envoy generates one (TTL-based, set via ttl field).
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your application
+  name: your-stateful-app
+  # REPLACE: namespace where your application runs
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-stateful-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: service name and port
+        - name: your-stateful-app
+          port: 80
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  # REPLACE: name (convention: same as the HTTPRoute)
+  name: your-stateful-app
+  # REPLACE: same namespace as the HTTPRoute
+  namespace: your-namespace
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: your-stateful-app  # REPLACE: must match HTTPRoute name above
+  loadBalancer:
+    type: ConsistentHash
+    consistentHash:
+      type: Cookie
+      cookie:
+        # REPLACE: cookie name for session affinity
+        # Convention: use the same name as the nginx session-cookie-name
+        name: your-app-session
+        # REPLACE: cookie TTL (how long the affinity lasts)
+        # Maps to nginx session-cookie-max-age
+        ttl: 3600s
+        attributes:
+          # SameSite and Path attributes for the cookie
+          sameSite: Lax
+          path: /

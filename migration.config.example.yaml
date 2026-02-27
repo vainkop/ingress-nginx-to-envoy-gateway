@@ -1,0 +1,145 @@
+# ingress-nginx to Envoy Gateway Migration Configuration
+#
+# Copy this file to migration.config.yaml and customize for your environment.
+# This file is read by Claude Code agents and skills at session start.
+# migration.config.yaml is gitignored -- your local config stays local.
+#
+# Required fields are marked with # REQUIRED
+# Optional fields show their defaults
+
+project:
+  # Envoy Gateway version to target
+  # See compatibility matrix: https://gateway.envoyproxy.io/news/releases/matrix/
+  envoy_gateway_version: "v1.7.0"  # REQUIRED
+
+# Clusters to migrate, ordered by migration priority
+# Migrate dev -> staging -> prod
+clusters:  # REQUIRED (at least one)
+  - name: "dev-cluster"
+    tier: "dev"            # dev | staging | prod
+    cloud: "aws"           # aws | azure | gcp | on-prem
+    arch: "amd64"          # amd64 | arm64 | multi
+    context: ""            # kubectl context name (leave empty to use current)
+
+  # - name: "staging-cluster"
+  #   tier: "staging"
+  #   cloud: "aws"
+  #   arch: "amd64"
+  #   context: ""
+
+  # - name: "prod-cluster"
+  #   tier: "prod"
+  #   cloud: "aws"
+  #   arch: "amd64"
+  #   context: ""
+
+  # DR clusters: hibernated/standby clusters that share hostnames with primary
+  # These are updated AFTER the primary is migrated, so failover is ready
+  # - name: "prod-dr-cluster"
+  #   tier: "prod"
+  #   cloud: "aws"
+  #   arch: "amd64"
+  #   context: ""
+  #   dr_for: "prod-cluster"  # Name of primary cluster
+
+# Repository paths (local filesystem)
+repos:
+  # GitOps infrastructure repo (Flux kustomizations, ArgoCD appsets, etc.)
+  infrastructure: ""       # e.g., "/home/user/repos/infrastructure"
+
+  # Helm charts repo (shared app charts)
+  helm_charts: ""          # e.g., "/home/user/repos/helm-charts"
+
+  # Apps with their own repos and deploy methods (not managed by GitOps)
+  # These need special handling -- ingress changes go in their own repo
+  standalone_apps: []
+  # - name: "my-app"
+  #   repo: "/home/user/repos/my-app"
+  #   deploy_method: "github-actions"  # github-actions | gitlab-ci | jenkins | manual
+  #   chart_path: "deploy/helm/my-app"  # Path to Helm chart within repo
+
+# GitOps tool configuration
+gitops:
+  tool: "argocd"           # argocd | flux | none
+  # ArgoCD-specific
+  # argocd_namespace: "argocd"
+  # Flux-specific
+  # flux_namespace: "flux-system"
+
+# DNS configuration
+dns:
+  provider: "cloudflare"   # cloudflare | route53 | google-cloud-dns | external-dns-only
+  proxied: false           # true if DNS records go through a CDN/proxy (e.g., Cloudflare proxy)
+  external_dns_policy: "upsert-only"  # upsert-only | sync
+  # When external_dns_policy is "upsert-only", old DNS records pointing to nginx
+  # won't auto-delete. You must manually clean them after migration.
+
+# TLS configuration
+tls:
+  provider: "cert-manager"  # cert-manager | manual | none
+  issuer_name: "letsencrypt-prod"
+  issuer_kind: "ClusterIssuer"  # ClusterIssuer | Issuer
+  # cert-manager needs config.enableGatewayAPI: true in its Helm values
+  # See docs/cert-manager-gateway-setup.md
+
+# Authentication patterns in use
+auth:
+  # Set to true if any apps use oauth2-proxy for authentication
+  oauth2_proxy: false
+  # Apps that use HTTP basic auth (SecurityPolicy with .htpasswd)
+  basic_auth_apps: []
+  # - name: "my-app"
+  #   namespace: "my-app"
+
+# Private container registry (optional -- for importing images to avoid DockerHub rate limits)
+# registry:
+#   type: "acr"            # acr | ecr | gcr | none
+#   name: ""               # Registry name (e.g., "myregistry" for myregistry.azurecr.io)
+
+# Advanced settings
+advanced:
+  # Node selector for Envoy Gateway controller and proxy pods
+  node_selector: {}
+  # node_selector:
+  #   kubernetes.io/arch: amd64
+  #   node-role: infra
+
+  # Replica counts
+  controller_replicas: 3
+  proxy_replicas: 3
+
+  # Envoy Gateway namespace (rarely needs changing)
+  namespace: "envoy-gateway-system"
+
+  # Custom EnvoyProxy config name
+  envoy_proxy_name: "custom-proxy-config"
+
+  # Access log format -- always include %RESPONSE_CODE_DETAILS% for debugging
+  # access_log_format: |
+  #   [%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%"
+  #   %RESPONSE_CODE% %RESPONSE_CODE_DETAILS% %RESPONSE_FLAGS% %BYTES_RECEIVED%
+  #   %BYTES_SENT% %DURATION% "%REQ(X-FORWARDED-FOR)%" "%REQ(USER-AGENT)%"
+  #   "%UPSTREAM_HOST%"
+
+# Optional integrations (uncomment to enable)
+# These provide enhanced diagnostics but are not required
+
+# observability:
+#   tool: "groundcover"    # groundcover | datadog | prometheus | none
+#   # If set, cluster-auditor will query RPS/error rates for traffic analysis
+
+# cloud_specific:
+#   # Azure AKS
+#   azure:
+#     acr_name: ""         # For import-acr-image skill
+#   # AWS EKS
+#   aws:
+#     ecr_region: ""
+#   # GCP GKE
+#   gcp:
+#     gcr_project: ""
+
+# node_autoscaler:
+#   tool: ""               # cast-ai | karpenter | cluster-autoscaler | none
+#   # If using an autoscaler with custom taints, Envoy pods need to schedule
+#   # on untainted general-purpose nodes. Set node_selector above accordingly.

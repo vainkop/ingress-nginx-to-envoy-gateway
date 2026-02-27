@@ -1,0 +1,36 @@
+# cert-manager Helm values for Gateway API support
+#
+# cert-manager requires explicit configuration to work with Gateway API.
+# Without these settings, cert-manager cannot:
+# - Watch Gateway/HTTPRoute resources for TLS certificate annotations
+# - Create temporary HTTPRoutes for ACME http01 challenges
+# - Issue certificates referenced by Gateway listeners
+#
+# IMPORTANT:
+# 1. Use config.enableGatewayAPI: true (NOT the deprecated featureGates approach)
+# 2. After applying these values, restart cert-manager pods so they pick up
+#    the new RBAC rules for Gateway API resources:
+#      kubectl rollout restart deployment cert-manager -n cert-manager
+# 3. The Gateway must have an HTTP listener (port 80) with allowedRoutes from: All
+#    for http01 challenges to work.
+
+# cert-manager Helm chart values
+config:
+  # Enable Gateway API support in cert-manager
+  # This replaces the old approach of setting:
+  #   extraArgs: ["--feature-gates=ExperimentalGatewayAPISupport=true"]
+  # which is DEPRECATED and may not work in newer cert-manager versions.
+  enableGatewayAPI: true
+
+# Optional: ensure cert-manager runs on the correct nodes
+# REPLACE: set nodeSelector to match your cluster's node labels
+nodeSelector:
+  kubernetes.io/arch: amd64
+
+webhook:
+  nodeSelector:
+    kubernetes.io/arch: amd64
+
+cainjector:
+  nodeSelector:
+    kubernetes.io/arch: amd64

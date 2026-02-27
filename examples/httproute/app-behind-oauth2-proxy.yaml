@@ -1,0 +1,71 @@
+# HTTPRoute for an app behind oauth2-proxy (Reverse Proxy Pattern)
+#
+# ============================================================================
+# WHY NOT SecurityPolicy extAuth?
+# ============================================================================
+# You might expect to use Envoy Gateway's SecurityPolicy with extAuth to call
+# oauth2-proxy as an external authorization service. DO NOT DO THIS.
+#
+# The problem: Envoy strips the "Location" header from ext_authz DENIED
+# responses. When oauth2-proxy returns a 302 redirect to the OAuth provider's
+# login page, Envoy strips the Location header, and the browser receives a
+# 302 with no redirect target — breaking the entire login flow.
+#
+# This is a known limitation of Envoy's ext_authz filter behavior.
+#
+# ============================================================================
+# CORRECT PATTERN: oauth2-proxy as a Reverse Proxy
+# ============================================================================
+# Instead, route ALL traffic to oauth2-proxy (port 4180), and configure
+# oauth2-proxy to forward authenticated requests to your app via its
+# OAUTH2_PROXY_UPSTREAMS setting.
+#
+# Traffic flow:
+#   Client -> Gateway -> oauth2-proxy:4180 -> your-app:80
+#
+# oauth2-proxy handles:
+#   1. Unauthenticated users: redirects to OAuth provider login
+#   2. /oauth2/callback: completes the OAuth flow
+#   3. Authenticated users: proxies request to upstream (your app)
+#
+# ============================================================================
+# OAUTH2-PROXY CONFIGURATION
+# ============================================================================
+# In your oauth2-proxy deployment, set:
+#   OAUTH2_PROXY_UPSTREAMS: "http://your-app.your-namespace.svc.cluster.local:80"
+#   OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+#
+# nginx equivalent annotations being replaced:
+#   nginx.ingress.kubernetes.io/auth-url: "https://$host/oauth2/auth"
+#   nginx.ingress.kubernetes.io/auth-signin: "https://$host/oauth2/start?rd=$escaped_request_uri"
+# ============================================================================
+
+# The app's HTTPRoute - sends ALL traffic to oauth2-proxy
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your application
+  name: your-app
+  # REPLACE: namespace where oauth2-proxy runs (often same as the app)
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-app.your-domain.example.com
+  rules:
+    # Route ALL traffic (including /oauth2/* paths) to oauth2-proxy.
+    # oauth2-proxy handles auth internally and forwards to your app.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: oauth2-proxy service name and port
+        # oauth2-proxy default port is 4180
+        - name: your-app-oauth2-proxy
+          port: 4180

@@ -1,0 +1,82 @@
+# Flux Kustomization for Envoy Gateway with CRD ordering
+#
+# Envoy Gateway has a dependency chain:
+# 1. Gateway API CRDs (standard k8s gateway CRDs)
+# 2. Envoy Gateway CRDs + controller (installed via HelmRelease)
+# 3. EnvoyProxy, GatewayClass, Gateway, ClientTrafficPolicy (custom resources)
+#
+# Flux Kustomization's dependsOn ensures correct ordering.
+# Without this, custom resources may fail to apply because CRDs don't exist yet.
+#
+# Directory structure in your Flux repo:
+#   infrastructure/
+#     envoy-gateway/
+#       crds/              <- Gateway API standard CRDs
+#       controller/        <- HelmRelease for Envoy Gateway
+#       config/            <- GatewayClass, EnvoyProxy, Gateway, ClientTrafficPolicy
+
+# Step 1: Gateway API standard CRDs
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: gateway-api-crds
+  # REPLACE: namespace where Flux manages resources
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  timeout: 5m
+  # REPLACE: path to Gateway API CRDs in your Flux repo
+  path: ./infrastructure/envoy-gateway/crds
+  prune: false  # Never prune CRDs automatically
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+
+# Step 2: Envoy Gateway controller (HelmRelease)
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: envoy-gateway-controller
+  # REPLACE: namespace where Flux manages resources
+  namespace: flux-system
+spec:
+  interval: 30m
+  retryInterval: 1m
+  timeout: 10m
+  # REPLACE: path to the HelmRelease directory in your Flux repo
+  path: ./infrastructure/envoy-gateway/controller
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  # Wait for CRDs before installing the controller
+  dependsOn:
+    - name: gateway-api-crds
+
+# Step 3: Gateway configuration (GatewayClass, EnvoyProxy, Gateway, policies)
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: envoy-gateway-config
+  # REPLACE: namespace where Flux manages resources
+  namespace: flux-system
+spec:
+  interval: 30m
+  retryInterval: 1m
+  timeout: 5m
+  # REPLACE: path to Gateway config resources in your Flux repo
+  path: ./infrastructure/envoy-gateway/config
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  wait: true
+  # Wait for the controller before applying custom resources
+  dependsOn:
+    - name: envoy-gateway-controller

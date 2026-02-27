@@ -1,0 +1,84 @@
+# Auth-protected app migration values
+#
+# This example covers two authentication patterns:
+#
+# ============================================================================
+# PATTERN 1: oauth2-proxy (Reverse Proxy)
+# ============================================================================
+# For apps protected by oauth2-proxy (e.g. OIDC/OAuth2 providers like Azure AD,
+# GitHub, Google, etc.)
+#
+# Original nginx annotations being replaced:
+#   nginx.ingress.kubernetes.io/auth-url: "https://$host/oauth2/auth"
+#   nginx.ingress.kubernetes.io/auth-signin: "https://$host/oauth2/start?rd=$escaped_request_uri"
+#
+# With Envoy Gateway, we route ALL traffic through oauth2-proxy as a reverse proxy
+# (NOT using SecurityPolicy extAuth - see app-behind-oauth2-proxy.yaml for details).
+#
+# ============================================================================
+# PATTERN 2: Basic Auth (SecurityPolicy)
+# ============================================================================
+# For apps protected by HTTP basic authentication.
+#
+# Original nginx annotations being replaced:
+#   nginx.ingress.kubernetes.io/auth-type: basic
+#   nginx.ingress.kubernetes.io/auth-secret: my-secret
+#
+# With Envoy Gateway, we use SecurityPolicy with basicAuth.
+# ============================================================================
+
+# --- PATTERN 1: oauth2-proxy reverse proxy ---
+# Disable the old Ingress resources (both app and oauth2-proxy Ingress)
+ingress:
+  enabled: false
+
+# Enable Gateway API - route through oauth2-proxy
+gatewayAPI:
+  enabled: true
+  # REPLACE: name and namespace of your Gateway
+  gatewayName: "envoy-gateway"
+  gatewayNamespace: "envoy-gateway-system"
+
+# oauth2-proxy configuration
+# These values configure the oauth2-proxy deployment to act as a reverse proxy.
+# The oauth2-proxy Helm chart (or your custom deployment) should use these.
+oauth2Proxy:
+  enabled: true
+  # REPLACE: the upstream URL where oauth2-proxy forwards authenticated requests
+  # This should be the Kubernetes service URL of your actual application
+  upstreams:
+    - "http://your-app.your-namespace.svc.cluster.local:80"
+  # REPLACE: your OAuth provider settings
+  provider: oidc
+  # REPLACE: your OIDC issuer URL
+  oidcIssuerUrl: "https://login.example.com/v2.0"
+  # REPLACE: OAuth client ID (store in a Secret, not in values)
+  clientID: ""
+  # REPLACE: cookie settings
+  cookieName: "_oauth2_proxy"
+  # REPLACE: allowed email domains or groups
+  emailDomains:
+    - "your-domain.example.com"
+
+---
+# --- PATTERN 2: Basic auth ---
+# Alternatively, if using basic auth instead of oauth2-proxy:
+
+# Disable the old Ingress resource
+# ingress:
+#   enabled: false
+
+# Enable Gateway API with basic auth
+# gatewayAPI:
+#   enabled: true
+#   gatewayName: "envoy-gateway"
+#   gatewayNamespace: "envoy-gateway-system"
+#
+#   # Basic auth configuration
+#   basicAuth:
+#     enabled: true
+#     # REPLACE: name of the Secret containing the .htpasswd file
+#     # The Secret must have a key named ".htpasswd" with SHA-hashed entries.
+#     # Generate entries with: htpasswd -s -n -b <username> <password>
+#     # NOTE: use SHA hash format, NOT bcrypt (Envoy doesn't support bcrypt)
+#     secretName: "your-app-basic-auth"

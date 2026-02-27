@@ -1,0 +1,75 @@
+# ReferenceGrant - Allow cross-namespace references in Gateway API
+#
+# Gateway API enforces strict namespace boundaries by default. When an HTTPRoute
+# in one namespace needs to reference a Service, Secret, or other resource in a
+# different namespace, a ReferenceGrant must exist in the TARGET namespace to
+# explicitly allow the reference.
+#
+# Common scenarios requiring a ReferenceGrant:
+# - App HTTPRoute references oauth2-proxy Service in a shared auth namespace
+# - SecurityPolicy references an auth Secret in a different namespace
+# - HTTPRoute references a shared backend Service
+# - GRPCRoute or TLSRoute referencing cross-namespace backends
+#
+# Without a ReferenceGrant, cross-namespace references are SILENTLY rejected.
+# The HTTPRoute will show Accepted: True but ResolvedRefs: False.
+---
+# Example 1: Allow HTTPRoutes in "my-app" to reference Services in "auth" namespace
+# Use case: App routes traffic to oauth2-proxy running in a shared auth namespace
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  # REPLACE: descriptive name
+  name: allow-my-app-to-auth-services
+  # This MUST be in the TARGET namespace (where the referenced resource lives)
+  # REPLACE: namespace where oauth2-proxy or auth service runs
+  namespace: auth
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      # REPLACE: namespace where the HTTPRoute lives
+      namespace: my-app
+  to:
+    - group: ""
+      kind: Service
+---
+# Example 2: Allow SecurityPolicies to reference Secrets in a shared namespace
+# Use case: Basic auth htpasswd Secret stored in a centralized secrets namespace
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-policy-to-shared-secrets
+  # REPLACE: namespace where the shared Secret lives
+  namespace: shared-secrets
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: SecurityPolicy
+      # REPLACE: namespace where the SecurityPolicy lives
+      namespace: my-app
+  to:
+    - group: ""
+      kind: Secret
+---
+# Example 3: Allow HTTPRoutes from multiple namespaces to reference Services in "shared" namespace
+# Use case: Shared microservices that multiple apps route to
+# NOTE: Each namespace needs its own entry -- the "namespace" field is required per the CRD schema.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-apps-to-shared
+  namespace: shared
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      # REPLACE: namespace of the first app
+      namespace: app-one
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      # REPLACE: namespace of the second app
+      namespace: app-two
+  to:
+    - group: ""
+      kind: Service

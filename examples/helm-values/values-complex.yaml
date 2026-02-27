@@ -1,0 +1,52 @@
+# Complex app migration values - all BackendTrafficPolicy features
+#
+# This example shows a fully-configured app that uses:
+# - Custom request timeout (was: proxy-read-timeout / proxy-send-timeout)
+# - Custom connect timeout (was: proxy-connect-timeout)
+# - Request body size limit (was: proxy-body-size)
+# - Session affinity via cookie (was: affinity: cookie + session-cookie-*)
+#
+# Original nginx annotations being replaced:
+#   nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+#   nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+#   nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+#   nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+#   nginx.ingress.kubernetes.io/affinity: "cookie"
+#   nginx.ingress.kubernetes.io/session-cookie-name: "my-app-session"
+#   nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+#
+# This file is an environment-specific override (e.g. dev-values.yaml).
+
+# Disable the old Ingress resource
+ingress:
+  enabled: false
+
+# Enable Gateway API with full BackendTrafficPolicy configuration
+gatewayAPI:
+  enabled: true
+  # REPLACE: name and namespace of your Gateway
+  gatewayName: "envoy-gateway"
+  gatewayNamespace: "envoy-gateway-system"
+
+  # Request body size limit (maps to proxy-body-size: 100m)
+  # REPLACE: set to match your nginx proxy-body-size value
+  requestBufferLimit: "100Mi"
+
+  # Timeout settings
+  timeout:
+    http:
+      # Maps to proxy-read-timeout: 300 and proxy-send-timeout: 300
+      # REPLACE: set to match your nginx timeout values
+      requestTimeout: "300s"
+    tcp:
+      # Maps to proxy-connect-timeout: 10
+      # REPLACE: set to match your nginx connect timeout
+      connectTimeout: "10s"
+
+  # Session affinity (cookie-based consistent hashing)
+  # Maps to nginx affinity: cookie + session-cookie-* annotations
+  sessionAffinity:
+    # REPLACE: cookie name (match nginx session-cookie-name)
+    cookieName: "my-app-session"
+    # REPLACE: cookie TTL in seconds (match nginx session-cookie-max-age)
+    cookieTTL: "3600s"

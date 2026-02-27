@@ -1,0 +1,74 @@
+# HTTPRoute with Basic Authentication (SecurityPolicy)
+#
+# This replaces nginx basic auth annotations:
+#   nginx.ingress.kubernetes.io/auth-type: basic
+#   nginx.ingress.kubernetes.io/auth-secret: my-basic-auth
+#   nginx.ingress.kubernetes.io/auth-realm: "Authentication Required"
+#
+# The SecurityPolicy references a Secret containing an .htpasswd file.
+# The Secret MUST have a key named ".htpasswd" with entries in the format:
+#   username:{SHA}base64encodedSHA1hash
+#
+# IMPORTANT:
+# - Use SHA hash format (not bcrypt). Generate with:
+#   htpasswd -s -n -b username password
+# - Use targetRefs (plural list), not the deprecated targetRef (singular)
+# - The Secret must be in the same namespace as the SecurityPolicy
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  # REPLACE: name of the basic auth secret
+  name: your-app-basic-auth
+  # REPLACE: namespace where the HTTPRoute lives
+  namespace: your-namespace
+type: Opaque
+stringData:
+  # REPLACE: generate your own htpasswd entries using:
+  #   htpasswd -s -n -b <username> <password>
+  # Multiple users: one per line
+  .htpasswd: |
+    admin:{SHA}0DPiKuNIrrVmD8IUCuw1hQxNqZc=
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  # REPLACE: name of your application
+  name: your-protected-app
+  # REPLACE: namespace where your application runs
+  namespace: your-namespace
+spec:
+  parentRefs:
+    - name: envoy-gateway  # REPLACE: name of your Gateway
+      namespace: envoy-gateway-system  # REPLACE: Gateway namespace
+      sectionName: https  # REPLACE: listener name from Gateway
+  hostnames:
+    # REPLACE: your application's hostname
+    - your-protected-app.your-domain.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        # REPLACE: service name and port
+        - name: your-protected-app
+          port: 80
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  # REPLACE: name (convention: same as the HTTPRoute)
+  name: your-protected-app-auth
+  # REPLACE: same namespace as the HTTPRoute
+  namespace: your-namespace
+spec:
+  # IMPORTANT: use targetRefs (plural), not the deprecated targetRef (singular)
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: your-protected-app  # REPLACE: must match HTTPRoute name above
+  basicAuth:
+    users:
+      # REPLACE: must match the Secret name above
+      name: your-app-basic-auth

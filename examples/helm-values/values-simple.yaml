@@ -1,0 +1,25 @@
+# Simple app migration values
+#
+# For a basic app with no special nginx annotations (no custom timeouts,
+# no body size limits, no session affinity), the migration is just:
+#   1. Set ingress.enabled: false
+#   2. Set gatewayAPI.enabled: true
+#
+# CRITICAL: Both changes must be in the SAME commit to avoid DNS flapping.
+# Never have both Ingress and HTTPRoute active for the same hostname, as
+# external-dns will alternate the A record between the nginx and Envoy
+# LoadBalancer IPs.
+#
+# This file is an environment-specific override (e.g. dev-values.yaml).
+# It merges with your chart's default values.yaml.
+
+# Disable the old Ingress resource
+ingress:
+  enabled: false
+
+# Enable the new Gateway API HTTPRoute
+gatewayAPI:
+  enabled: true
+  # REPLACE: name and namespace of your Gateway
+  gatewayName: "envoy-gateway"
+  gatewayNamespace: "envoy-gateway-system"
